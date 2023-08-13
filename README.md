@@ -147,5 +147,68 @@ R2(config-if)#
 - Настройте Keepalived так, чтобы он запускал данный скрипт каждые 3 секунды и переносил виртуальный IP на другой сервер, если bash-скрипт завершался с кодом, отличным от нуля (то есть порт веб-сервера был недоступен или отсутствовал index.html). Используйте для этого секцию vrrp_script
 - На проверку отправьте получившейся bash-скрипт и конфигурационный файл keepalived, а также скриншот с демонстрацией переезда плавающего ip на другой сервер в случае недоступности порта или файла index.html
 
-
 ------
+### Решение:
+Настройка Keepalived с использованием скрипта для проверки доступности порта веб-сервера и наличия файла index.html:
+
+```bash
+! Configuration File for keepalived
+
+global_defs {
+    router_id LVS_DEVEL
+}
+
+vrrp_script check_webserver {
+    script "/path/to/check_webserver.sh"
+    interval 3
+    fall 2
+    rise 2
+}
+
+vrrp_instance VI_1 {
+    state MASTER
+    interface eth0
+    virtual_router_id 51
+    priority 100
+
+    authentication {
+        auth_type PASS
+        auth_pass password
+    }
+
+    virtual_ipaddress {
+        192.168.0.100
+    }
+
+    track_script {
+        check_webserver
+    }
+}
+```
+
+В данном примере используется секция `vrrp_script`, где указывается путь к bash-скрипту `check_webserver.sh`, который будет выполняться каждые 3 секунды. В скрипте можно использовать команду `nc` для проверки доступности порта веб-сервера и команду `test` для проверки наличия файла index.html.
+
+Скрипт `check_webserver.sh`:
+
+```bash
+#!/bin/bash
+
+# Проверка доступности порта веб-сервера
+nc -z localhost 80
+result1=$?
+
+# Проверка наличия файла index.html
+test -f /var/www/html/index.html
+result2=$?
+
+# Если порт недоступен или файл отсутствует, возвращаем код отличный от нуля
+if [ $result1 -ne 0 ] || [ $result2 -ne 0 ]; then
+    exit 1
+fi
+
+exit 0
+```
+
+В данном скрипте сначала проверяется доступность порта веб-сервера с помощью команды `nc -z`, затем проверяется наличие файла index.html с помощью команды `test -f`. Если одно из условий не выполняется, скрипт возвращает код отличный от нуля.
+
+В конфигурационном файле Keepalived нужно указать правильный путь к скрипту `check_webserver.sh`.
